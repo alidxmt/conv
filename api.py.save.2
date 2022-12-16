@@ -1,0 +1,39 @@
+from fastapi import FastAPI
+from predfn import predict
+from fastapi.middleware.cors import CORSMiddleware
+from mod_prediction import prediction_setup,prediction,get_class_to_category
+
+app = FastAPI()
+
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+items = {}
+
+
+@app.on_event('startup')
+async def startup_event():
+    items['intr'] = 'I am listening!'
+    items['model_path'] = '/home/ali_zolfagharian/foodyai/logs/model_final.pth'
+    items['output_filepath'] = output_filepath = "/home/ali_zolfagharian/foodyai/logs-pred/prediction_test.json"
+
+@app.get("/")
+async def root():
+    return {"message": items['intr']}
+
+@app.get("/pred/")
+async def pred(id:str):
+    return {"message": '|'.join(predict(id=id,p=False))}
+
+@app.get("/predimg/")
+async def predimg(path:str):
+    return {"message": '|'.join(predict(id=path,p=True))}

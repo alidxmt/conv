@@ -1,0 +1,32 @@
+
+from fastapi import FastAPI
+from predfn import predict
+
+app = FastAPI()
+origins = ["*"]
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins
+)
+
+
+@app.get("/")
+async def root():
+    return {"message": 'image and nutrition'}
+
+
+
+@app.get("/predimg")
+async def test(path:str):
+	return {"message":predict(img_id=path,p=True)}
+
+@app.get("/pred")
+async def pred(id:str):
+	if id=='':    
+		return {"message": '|'.join(predict())}
+	else:
+		return {"message":'|'.join(predict(img_id=id,p=False))}
+
