@@ -2,60 +2,52 @@ import os
 import json
 import importlib
 import numpy as np
-import pandas as pd
 import cv2
-#import torch
+import torch
 from detectron2.engine import DefaultPredictor
 
-#from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-#from detectron2.data import build_detection_test_loader
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
 from detectron2.structures import Boxes, BoxMode
 from detectron2.config import get_cfg
 import pycocotools.mask as mask_util
 
-from foodyai.gc_bucket.data import get_class
 
-
-def prediction_setup(threshold:float, model_path:str, config_path:str,model="model_zoo"):
+def prediction_setup(self):
     """
-    Setting the config parameters for the prediction
-    - threshold is a float between 0 and 1
-    - model_path is the path to the model_final.pth
-    - config path is the pâath to the config of the model
-    - model is the name of the model used from detectron. By default, model_zoo
-    Config and model are both output after training the model
+    Setting the config parameters
     """
-    model_name = model
-    model = importlib.import_module(f"detectron2.{model_name}")
 
-    cfg = get_cfg()
-    cfg.merge_from_file(config_path)
-    cfg.MODEL.WEIGHTS = model_path
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = threshold
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 323
+    self.config = self.get_detectron_config()
+    self.model_name = self.config["model_type"]
+    self.model = importlib.import_module(f"detectron2.{self.model_name}")
+    self.class_to_category = self.get_class_to_category()
+    args = default_argument_parser()
+    args = args.parse_args(
+        """
+        --num-gpus 1
+        --config-file COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml
+        --resume
+        MODEL.WEIGHTS weights/model_final.pth
+        TEST.AUG.ENABLED False"""
+        .split())
+    cfg = setup(args)
+    model = build_model(cfg)
+    logger.info("Model:\n{}".format(model))
+    DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+        cfg.MODEL.WEIGHTS, resume=args.resume
+    )
+    if cfg.TEST.AUG.ENABLED:
+        logger.info("Running inference with test-time augmentation ...")
+        model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
+    self.predictor = Predictor(cfg, model)
 
-    cfg.MODEL.DEVICE = "cpu" #if MacOS
-    #cfg.MODEL.DEVICE = "cuda" #if Windows (but install cuda in requirements)
 
-    predictor = DefaultPredictor(cfg)
-
-    return predictor
-
-
-
-def prediction(predictor:DefaultPredictor,image_path:str,class_to_category:dict,output_filepath:str):
-    """
-    run the prediction on one image given as input
-    - predictor is the output of prediction_setup function
-    - image_path is the path to the image to predict
-    - class_to_category is a dictionary output from the get_class_to_category function
-    - output_file_path is the path you want the prediction output to be saved
-    it will be a json file with imageid, categoryid, score, bbox, segmentation
-    """
+def prediction(self, image_path):
     print("Generating for", image_path)
-
+    # read the image
     img = cv2.imread(image_path)
-    prediction = predictor(img)
+    prediction = self.predictor(img)
 
     annotations = []
     instances = prediction["instances"]
@@ -76,7 +68,7 @@ def prediction(predictor:DefaultPredictor,image_path:str,class_to_category:dict,
                 masks.append(_mask)
 
         for idx in range(len(instances)):
-            category_id = class_to_category[str(classes[idx])] # json converts int keys to str
+            category_id = self.class_to_category[str(classes[idx])] # json converts int keys to str
             output = {
                 "image_id": int(os.path.basename(image_path).split(".")[0]),
                 "category_id": category_id,
@@ -87,26 +79,16 @@ def prediction(predictor:DefaultPredictor,image_path:str,class_to_category:dict,
                 output["segmentation"] = masks[idx]
             annotations.append(output)
 
-            with open(output_filepath, "w") as fp:
-                json.dump(annotations, fp)
+    # You can return single annotation or array of annotations in your code.
+    return annotations
 
-            df = pd.read_json(output_filepath)
-
-    return df[['image_id','category_id','score']]
-
-def get_class_to_category():
-    """
-    open the class_to_category json file
-    """
-    config_path = './raw_data/class_to_category.json'
-    if os.path.isfile(config_path) == False:
-        get_class(download_to_disk = True,
-                destination_file_name = './raw_data/class_to_category.json')
-        class_to_cat = './raw_data/class_to_category.json'
-    else:
-        class_to_cat = './raw_data/class_to_category.json'
-
-    #class_to_category = {}
-    with open(class_to_cat) as fp:
+def get_class_to_category(self):
+    class_to_category = {}
+    with open("utils/class_to_category.json") as fp:
         class_to_category = json.load(fp)
     return class_to_category
+
+def get_detectron_config(self):
+    with open("aicrowd.json") as fp:
+        config = json.load(fp)
+    return config

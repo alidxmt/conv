@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>image to nutrition</h1>
+<div id = 'main'> </div>
+
+</body>
+<script>
+url = 'http://34.118.49.93/predi/?image_path=055902'
+function testapi(data) {
+    main = document.getElementById('main');
+    //main.innerHTML=JSON.stringify(data)
+    main.innerHTML=(data['message'].slice(0, 3))
+}
+fetch(url)
+  .then((response) => response.json())
+  .then((data) => testapi(data));
+
+
+</script>
+</html>

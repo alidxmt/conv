@@ -1,0 +1,17 @@
+from fastapi import FastAPI
+from predfn import predict
+
+app = FastAPI()
+
+pred = predict()
+
+@app.get("/")
+async def root():
+    return {"message": '|'.join(pred)}
+
+@app.get("/predict")
+async def pred(path):
+    if path=='':
+	return {"message": '|'.join(predict(path))}{"message": '|'.join(predict(path))}
+    return {"message": '|'.join(predict(path))}
+

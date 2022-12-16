@@ -1,0 +1,2 @@
+@grep ^config Makefile
+
